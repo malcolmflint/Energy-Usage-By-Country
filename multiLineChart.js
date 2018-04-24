@@ -1,6 +1,7 @@
+// Adapted from https://bl.ocks.org/mbostock/3884955
 
 let svg = d3.select("svg"),
-    margin = {top: 20, right: 80, bottom: 30, left: 50},
+    margin = {top: 20, right: 80, bottom: 100, left: 100},
     width = svg.attr("width") - margin.left - margin.right,
     height = svg.attr("height") - margin.top - margin.bottom,
     g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
@@ -16,7 +17,20 @@ let line = d3.line()
     .x(function(d) { return x(d.date); })
     .y(function(d) { return y(d.gdp); });
 
-d3.text("EPC_2000_2010.csv", function (t) {
+// gridlines in x axis function
+function make_x_gridlines() {
+    return d3.axisBottom(x)
+        .ticks(5)
+}
+
+// gridlines in y axis function
+function make_y_gridlines() {
+    return d3.axisLeft(y)
+        .ticks(5)
+}
+
+// massages data to work with bostock's code
+function transpose_csv (t) {
     let rows = d3.csvParseRows(t);
     rows[0][0] = "date";
     let data = Array(rows[0].length - 1).fill({});
@@ -36,14 +50,18 @@ d3.text("EPC_2000_2010.csv", function (t) {
             }
         }
     });
-
     data.columns = Object.keys(data[0]);
+    return data;
+}
 
-    let countriesTemp = data.columns.filter(function (i) {
-        return i !== "date";
-    });
+d3.text("EPC_2000_2010.csv", function (t) {
+    let data = transpose_csv(t);
+    let brics = ["Brazil", "Russia", "India", "China", "South Africa", "United States"];
+    // let countriesTemp = data.columns.filter(function (i) {
+    //     return i !== "date";
+    // });
 
-    let countries = countriesTemp.map(function(id) {
+    let countries = brics.map(function(id) {
         return {
             id: id,
             values: data.map(function(d) {
@@ -74,18 +92,59 @@ d3.text("EPC_2000_2010.csv", function (t) {
         .attr("y", 6)
         .attr("dy", "0.71em")
         .attr("fill", "#000")
-        .text("GDP");
+
+    // Y axis Label
+    g.append("text")
+        .text("Million BTUs per Person")
+        .attr("y", 0 - margin.left / 2)
+        .attr("x", 0 - height / 2)
+        .attr("text-anchor", "middle")
+        .style("font", "12px sans-serif")
+        .attr("transform", "rotate(-90)");
+
+    g.append("text")
+        .text("Year")
+        .attr("y", height + margin.bottom / 2)
+        .attr("x", width / 2)
+        .attr("text-anchor", "center")
+        .style("font", "12px sans-serif");
+
+    // gridlines implementation found at https://bl.ocks.org/d3noob/c506ac45617cf9ed39337f99f8511218
+    // add the X gridlines
+    g.append("g")
+        .attr("class", "grid")
+        .attr("transform", "translate(0," + height + ")")
+        .call(make_x_gridlines()
+            .tickSize(-height)
+            .tickFormat("")
+        );
+
+    // add the Y gridlines
+    g.append("g")
+        .attr("class", "grid")
+        .call(make_y_gridlines()
+            .tickSize(-width)
+            .tickFormat("")
+        );
 
     let city = g.selectAll(".city")
         .data(countries)
         .enter().append("g")
         .attr("class", "city");
 
-    city.append("path")
+    let path = city.append("path")
         .attr("class", "line")
-        .transition()
         .attr("d", function(d) { return line(d.values); })
         .style("stroke", function(d) { return z(d.id); });
+
+    let totalLength = path.node().getTotalLength();
+
+    path
+        .attr("stroke-dasharray", totalLength + " " + totalLength)
+        .attr("stroke-dashoffset", totalLength)
+        .transition()
+        .duration(2000)
+        .attr("stroke-dashoffset", 0);
 
     city.append("text")
         .datum(function(d) { return {id: d.id, value: d.values[d.values.length - 1]}; })
