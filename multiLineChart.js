@@ -1,10 +1,12 @@
 // Adapted from https://bl.ocks.org/mbostock/3884955
 
-let svg = d3.select("svg"),
-    margin = {top: 20, right: 80, bottom: 100, left: 100},
+let svg = d3.select("svg").attr("width", 960)
+        .attr("height", 680),
+    margin = {top: 100, right: 80, bottom: 100, left: 100},
     width = svg.attr("width") - margin.left - margin.right,
     height = svg.attr("height") - margin.top - margin.bottom,
-    g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")"),
+    brics = ["Brazil", "Russia", "India", "China", "South Africa", "United States"];
 
 let parseTime = d3.timeParse("%Y");
 
@@ -54,14 +56,8 @@ function transpose_csv (t) {
     return data;
 }
 
-d3.text("EPC_2000_2010.csv", function (t) {
-    let data = transpose_csv(t);
-    let brics = ["Brazil", "Russia", "India", "China", "South Africa", "United States"];
-    // let countriesTemp = data.columns.filter(function (i) {
-    //     return i !== "date";
-    // });
-
-    let countries = brics.map(function(id) {
+function get_countries(country_list, data) {
+    return country_list.map(function(id) {
         return {
             id: id,
             values: data.map(function(d) {
@@ -69,29 +65,37 @@ d3.text("EPC_2000_2010.csv", function (t) {
             })
         };
     });
+}
 
-    x.domain(d3.extent(data, function(d) { return d.date; }));
+function draw_graph(data) {
+    let countriesTemp = [];
 
-    y.domain([
-        d3.min(countries, function(c) { return d3.min(c.values, function(d) { return d.gdp; }); }),
-        d3.max(countries, function(c) { return d3.max(c.values, function(d) { return d.gdp; }); })
-    ]);
+    d3.selectAll("input").each(function () {
+        let cb = d3.select(this);
+        if (cb.property("checked")) {
+            let country = cb.attr("id");
+            countriesTemp.push(country);
+            d3.select(this.parentNode)
+                .style("background", function () {
+                    return z(country);
+                });
+        } else {
+            d3.select(this.parentNode)
+                .style("background", function () {
+                    return "none";
+                })
+        }
+    });
 
-    z.domain(countries.map(function(c) { return c.id; }));
+    g.selectAll("*").remove();
 
-    g.append("g")
-        .attr("class", "axis axis--x")
-        .attr("transform", "translate(0," + height + ")")
-        .call(d3.axisBottom(x));
-
-    g.append("g")
-        .attr("class", "axis axis--y")
-        .call(d3.axisLeft(y))
-        .append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("y", 6)
-        .attr("dy", "0.71em")
-        .attr("fill", "#000")
+    // Title
+    g.append("text")
+        .text("Energy Consumption Per Capita")
+        .attr("y", 0 - margin.top / 2)
+        .attr("x", width / 2)
+        .attr("text-anchor", "middle")
+        .style("font", "30px sans-serif");
 
     // Y axis Label
     g.append("text")
@@ -102,6 +106,7 @@ d3.text("EPC_2000_2010.csv", function (t) {
         .style("font", "12px sans-serif")
         .attr("transform", "rotate(-90)");
 
+    // X axis Label
     g.append("text")
         .text("Year")
         .attr("y", height + margin.bottom / 2)
@@ -127,12 +132,37 @@ d3.text("EPC_2000_2010.csv", function (t) {
             .tickFormat("")
         );
 
-    let city = g.selectAll(".city")
+    let countries = get_countries(countriesTemp, data);
+    console.log(countries);
+
+    x.domain(d3.extent(data, function(d) { return d.date; }));
+    y.domain([
+        d3.min(countries, function(c) { return d3.min(c.values, function(d) { return d.gdp; }); }),
+        d3.max(countries, function(c) { return d3.max(c.values, function(d) { return d.gdp; }); })
+    ]);
+
+
+
+    g.append("g")
+        .attr("class", "axis axis--x")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x));
+
+    g.append("g")
+        .attr("class", "axis axis--y")
+        .call(d3.axisLeft(y))
+        .append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("y", 6)
+        .attr("dy", "0.71em")
+        .attr("fill", "#000");
+
+    let country = g.selectAll(".country")
         .data(countries)
         .enter().append("g")
-        .attr("class", "city");
+        .attr("class", "country");
 
-    let path = city.append("path")
+    let path = country.append("path")
         .attr("class", "line")
         .attr("d", function(d) { return line(d.values); })
         .style("stroke", function(d) { return z(d.id); });
@@ -146,12 +176,40 @@ d3.text("EPC_2000_2010.csv", function (t) {
         .duration(2000)
         .attr("stroke-dashoffset", 0);
 
-    city.append("text")
+    country.append("text")
         .datum(function(d) { return {id: d.id, value: d.values[d.values.length - 1]}; })
         .attr("transform", function(d) { return "translate(" + x(d.value.date) + "," + y(d.value.gdp) + ")"; })
         .attr("x", 3)
         .attr("dy", "0.35em")
         .style("font", "10px sans-serif")
         .text(function(d) { return d.id; });
+}
+
+d3.text("EPC_2000_2010.csv", function (t) {
+    let data = transpose_csv(t);
+
+    let countriesList = data.columns.filter(function (i) {
+        return i !== "date";
+    });
+
+    let countries = get_countries(countriesList, data);
+    z.domain(countries.map(function(c) { return c.id; }));
+
+    d3.select("body").select("form").selectAll("label")
+        .data(countries)
+        .enter()
+        .append("label")
+        .text(function (d) { return d.id; })
+        .append("input")
+        .attr("type", "checkbox")
+        .attr("id", function (d) { return d.id })
+        .property("checked", function (d) {
+            return brics.indexOf(d.id) !== -1;
+        })
+        .on("change", function() {
+            draw_graph(data);
+        });
+
+    draw_graph(data);
 });
 
